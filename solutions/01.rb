@@ -1,25 +1,15 @@
-def compute_fibonacci(index)
-  if index <= 1
-    index
-  else
-    compute_fibonacci(index - 1) + compute_fibonacci(index - 2)
+def compute_sequence(first, second, index)
+  (index - 1).times do
+    second = first + second
+    first = second - first
   end
-end
-
-def compute_lucas(index)
-  if index <= 1
-    2
-  elsif index == 2
-    1
-  else
-    compute_lucas(index - 1) + compute_lucas(index - 2)
-  end
+  first
 end
 
 def series(sequence, index)
   case sequence
-  when "fibonacci" then compute_fibonacci(index)
-  when "lucas"     then compute_lucas(index)
-  else compute_fibonacci(index) + compute_lucas(index)
+  when "fibonacci" then compute_sequence(1, 1, index)
+  when "lucas"     then compute_sequence(2, 1, index)
+  else compute_sequence(1, 1, index) + compute_sequence(2, 1, index)
   end
 end
