@@ -5,18 +5,12 @@ class NumberSet
     @array = array
   end
 
-  def each
-    iterator = 0
-    while iterator <= @array.size
-      yield @array[iterator]
-      iterator += 1
-    end
+  def each(&block)
+    @array.each(&block)
   end
 
   def <<(number)
-    unless @array.include?(number)
-      @array << number
-    end
+    @array << number unless @array.include?(number)
   end
 
   def size
@@ -28,87 +22,46 @@ class NumberSet
   end
 
   def [](filter)
-    NumberSet.new(filter.filter_numbers(@array))
+    NumberSet.new @array.select { |element| filter.call element }
   end
 end
-
-class CombineFilters
-  def initialize(first_filter, second_filter, operator)
-    @first_filter = first_filter
-    @second_filter = second_filter
-    @operator = operator
-  end
-
-  def filter_numbers(array)
-    if @operator == :&
-      @first_filter.filter_numbers(@second_filter.filter_numbers(array))
-    else @operator == :|
-      new_array = @first_filter.filter_numbers(array)
-      new_array + @second_filter.filter_numbers(array)
-    end
-  end
-end
-
 
 class Filter
-  def initialize(&block)
-    @block = block
-  end
-
-  def filter_numbers(array)
-    array.select {|element| @block.(element)}
+  def initialize(&condition)
+    @condition = condition
   end
 
   def &(filter)
-    CombineFilters.new(self, filter, :&)
+    Filter.new { |element| @condition.call element and filter.call element }
   end
 
   def |(filter)
-    CombineFilters.new(self, filter, :|)
+    Filter.new { |element| @condition.call element or filter.call element }
+  end
+
+  def call(element)
+    @condition.call element
   end
 end
 
-class TypeFilter
+class TypeFilter < Filter
   def initialize(type)
-    @type = type
-  end
-
-  def filter_numbers(array)
-    case @type
-    when :integer then array.select {|number| number.is_a? Integer}
-    when :complex then array.select {|number| number.is_a? Complex}
-    else array.select {|number| number.is_a? Float or number.is_a? Rational}
+    case type
+    when :integer then super() { |element| element.is_a? Integer }
+    when :real    then super() { |element| element.is_a? Float or
+                                           element.is_a? Rational }
+    when :complex then super() { |element| element.is_a? Complex }
     end
-  end
-
-  def &(filter)
-    CombineFilters.new(self, filter, :&)
-  end
-
-  def |(filter)
-    CombineFilters.new(self, filter, :|)
   end
 end
 
-class SignFilter
+class SignFilter < Filter
   def initialize(sign)
-    @sign = sign
-  end
-
-  def filter_numbers(array)
-    case @sign
-    when :positive     then array.select {|number| number > 0}
-    when :non_positive then array.select {|number| number <= 0}
-    when :negative     then array.select {|number| number < 0}
-    when :non_negative then array.select {|number| number >= 0}
+    case sign
+      when :positive     then super() { |element| element > 0 }
+      when :negative     then super() { |element| element < 0 }
+      when :non_positive then super() { |element| element <= 0 }
+      when :non_negative then super() { |element| element >= 0 }
     end
-  end
-
-  def &(filter)
-    CombineFilters.new(self, filter, :&)
-  end
-
-  def |(filter)
-    CombineFilters.new(self, filter, :|)
   end
 end
