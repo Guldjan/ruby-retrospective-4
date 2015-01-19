@@ -7,65 +7,121 @@ module RBFS
     end
 
     def data_type
-      case @data.class.to_s
-      when 'Fixnum', 'Float'         then @data_type = :number
-      when 'TrueClass', 'FalseClass' then @data_type = :boolean
-      when 'NilClass'                then @data_type = :nil
-      else @data_type = @data.class.to_s.downcase.intern
+      case @data
+      when nil      then :nil
+      when Numeric  then :number
+      when String   then :string
+      when Symbol   then :symbol
+      else               :boolean
       end
     end
 
     def serialize
-      data_type.to_s + ':' + @data.to_s
+      "#{data_type}:#{@data.to_s}"
     end
 
     def self.parse(string_data)
-      array = string_data.partition(':')
-      case array[0]
-      when 'number'  then File.new(array[2].to_f)
-      when 'nil'     then File.new(nil)
-      when 'string'  then File.new(array[2])
-      when 'symbol'  then File.new(array[2].intern)
-      when 'boolean' then File.new(array[2] == 'true')
+      data = parse_data *string_data.split(':', 2)
+      File.new data
+    end
+
+    private
+
+    def self.parse_data(type, data)
+      case type
+      when 'number'  then parse_number(data)
+      when 'nil'     then nil
+      when 'string'  then data
+      when 'symbol'  then data.to_sym
+      else                data == 'true'
+      end
+    end
+
+    def self.parse_number(data)
+      if data.include? '.'
+        data.to_f
+      else
+        data.to_i
       end
     end
   end
 
   class Directory
-    def initialize(hash = {})
-      @directory = hash
+    attr_reader :files, :directories
+
+    def initialize(files = {}, directories = {})
+      @files = files
+      @directories = directories
     end
 
     def add_file(name, file)
-      @directory[name] = file
+      @files[name] = file
     end
 
     def add_directory(name, directory = Directory.new)
-      @directory[name] = directory
-    end
-
-    def files
-      @directory.select{|key, value| value.is_a? File}
-    end
-
-    def directories
-      @directory.select{|key, value| value.is_a? Directory}
+      @directories[name] = directory
     end
 
     def [](name)
-      @directory[name]
+      @directories[name] || @files[name]
     end
 
     def serialize
-      result = files.length.to_s + ':'
-      files.each do |key, value|
-        result += key + ':' + value.serialize.length.to_s + ':' + value.serialize
+      files       = "#{@files.size}:#{serialize_entities(@files)}"
+      directories = "#{@directories.size}:#{serialize_entities(@directories)}"
+
+      "#{files}#{directories}"
+    end
+
+    def self.parse(string_data)
+      parser = Parser.new(string_data)
+      files       = {}
+      directories = {}
+      parser.each do |name, entity|
+        files[name] = File.parse(entity)
       end
-      result += directories.length.to_s + ':'
-      directories.each do |key, value|
-        result += key + ':' + value.serialize.length.to_s + ':' + value.serialize
+      parser.each do |name, entity|
+        directories[name] = Directory.parse(entity)
       end
-      result
+      Directory.new(files, directories)
+    end
+
+    private
+
+    def serialize_entities(entities)
+      entities.map do |name, entity|
+        serialized_entity = entity.serialize
+        "#{name}:#{serialized_entity.size}:#{serialized_entity}"
+      end.join('')
+    end
+  end
+
+ class Parser
+    def initialize(string_data)
+      @data = string_data
+    end
+
+    def each
+      size = read_next_record.to_i
+      size.times do
+        entity_name   = read_next_record
+        entity_string = read_next_entity
+        yield entity_name, entity_string
+      end
+    end
+
+    private
+
+    def read_next_entity
+      size   = read_next_record.to_i
+      entity = @data[0...size]
+      @data = @data[size...@data.size]
+      entity
+    end
+
+    def read_next_record
+      record, @data = @data.split(':', 2)
+      record
     end
   end
 end
